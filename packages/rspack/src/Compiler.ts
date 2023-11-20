@@ -51,6 +51,7 @@ import { FileSystemInfoEntry } from "./FileSystemInfo";
 import { RuntimeGlobals } from "./RuntimeGlobals";
 import { tryRunOrWebpackError } from "./lib/HookWebpackError";
 import { CodeGenerationResult } from "./Module";
+import ExecuteModulePlugin from "./ExecuteModulePlugin";
 
 class Compiler {
 	#_instance?: binding.Rspack;
@@ -181,6 +182,8 @@ class Compiler {
 		this.modifiedFiles = undefined;
 		this.removedFiles = undefined;
 		this.#disabledHooks = [];
+
+		new ExecuteModulePlugin().apply(this);
 	}
 
 	/**
@@ -883,7 +886,10 @@ class Compiler {
 			tryRunOrWebpackError(
 				() =>
 					this.compilation.hooks.executeModule.call(
-						{ result: new CodeGenerationResult(result), moduleObject },
+						{
+							codeGenerationResult: new CodeGenerationResult(result),
+							moduleObject
+						},
 						{ __webpack_require__ }
 					),
 				"Compilation.hooks.executeModule"

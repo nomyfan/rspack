@@ -1,0 +1,3 @@
+import val from './shared'
+
+console.log(val)

@@ -231,6 +231,23 @@ export async function runLoaders(
 		missingDependencies.length = 0;
 		cacheable = true;
 	};
+	loaderContext.importModule = function importModule(
+		request,
+		options,
+		callback
+	) {
+		compiler.compilation
+			.__internal_getInner()
+			.importModule(
+				request,
+				options.publicPath,
+				options.baseUri,
+				rawContext._moduleIdentifier,
+				loaderContext.context,
+				callback
+			);
+	};
+
 	Object.defineProperty(loaderContext, "resource", {
 		enumerable: true,
 		get: function () {

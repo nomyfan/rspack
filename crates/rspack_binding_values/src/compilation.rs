@@ -428,6 +428,35 @@ impl JsCompilation {
       )
     })
   }
+
+  #[allow(clippy::too_many_arguments)]
+  #[napi]
+  pub fn import_module(
+    &'static self,
+    env: Env,
+    request: String,
+    public_path: Option<String>,
+    base_uri: Option<String>,
+    original_module: Option<String>,
+    original_module_context: Option<String>,
+    callback: JsFunction,
+  ) -> Result<()> {
+    callbackify(env, callback, async {
+      let result = self
+        .inner
+        .import_module(
+          request,
+          public_path,
+          base_uri,
+          original_module.map(|s| s.into()),
+          original_module_context.map(|ctx| Box::new(rspack_core::Context::new(ctx))),
+        )
+        .await
+        .expect("failed to invoke javascript importModule");
+
+      Ok(result)
+    })
+  }
 }
 
 impl JsCompilation {

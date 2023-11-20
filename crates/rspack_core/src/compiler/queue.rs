@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use rspack_error::{Diagnostic, Result};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
   cache::Cache, BoxDependency, BuildContext, BuildResult, Compilation, CompilerContext,
@@ -9,7 +10,7 @@ use crate::{
   ModuleProfile, ModuleType, NormalModuleFactory, NormalModuleFactoryContext, Resolve,
   ResolverFactory, SharedPluginDriver, WorkerQueue,
 };
-use crate::{DependencyId, ExportInfo, ExportsInfo, UsageState};
+use crate::{Dependency, DependencyId, ExportInfo, ExportsInfo, UsageState};
 
 #[derive(Debug)]
 pub enum TaskResult {
@@ -17,6 +18,7 @@ pub enum TaskResult {
   Add(Box<AddTaskResult>),
   Build(Box<BuildTaskResult>),
   ProcessDependencies(Box<ProcessDependenciesResult>),
+  ImportModule(Box<ImportModuleResult>),
 }
 
 #[async_trait::async_trait]
@@ -41,6 +43,7 @@ pub struct FactorizeTask {
   pub plugin_driver: SharedPluginDriver,
   pub cache: Arc<Cache>,
   pub current_profile: Option<Box<ModuleProfile>>,
+  pub root_dependency: Option<DependencyId>,
 }
 
 /// a struct temporarily used creating ExportsInfo
@@ -61,6 +64,7 @@ pub struct FactorizeTaskResult {
   pub current_profile: Option<Box<ModuleProfile>>,
   pub exports_info_related: ExportsInfoRelated,
   pub from_cache: bool,
+  pub root_dependency: Option<DependencyId>,
 }
 
 #[async_trait::async_trait]
@@ -69,7 +73,8 @@ impl WorkerTask for FactorizeTask {
     if let Some(current_profile) = &self.current_profile {
       current_profile.mark_factory_start();
     }
-    let dependency = self.dependency;
+
+    let dependency: Box<dyn Dependency> = self.dependency;
 
     let context = if let Some(context) = dependency.get_context() {
       context
@@ -153,6 +158,7 @@ impl WorkerTask for FactorizeTask {
         other_exports_info,
         side_effects_info: side_effects_only_info,
       },
+      root_dependency: self.root_dependency,
     })))
   }
 }
@@ -166,16 +172,19 @@ pub struct AddTask {
   pub dependencies: Vec<DependencyId>,
   pub is_entry: bool,
   pub current_profile: Option<Box<ModuleProfile>>,
+  pub root_dependency: Option<DependencyId>,
 }
 
 #[derive(Debug)]
 pub enum AddTaskResult {
   ModuleReused {
     module: Box<dyn Module>,
+    root_dependency: Option<DependencyId>,
   },
   ModuleAdded {
     module: Box<dyn Module>,
     current_profile: Option<Box<ModuleProfile>>,
+    root_dependency: Option<DependencyId>,
   },
 }
 
@@ -200,6 +209,7 @@ impl AddTask {
 
       return Ok(TaskResult::Add(Box::new(AddTaskResult::ModuleReused {
         module: self.module,
+        root_dependency: self.root_dependency,
       })));
     }
 
@@ -227,6 +237,7 @@ impl AddTask {
     Ok(TaskResult::Add(Box::new(AddTaskResult::ModuleAdded {
       module: self.module,
       current_profile: self.current_profile,
+      root_dependency: self.root_dependency,
     })))
   }
 }
@@ -252,6 +263,8 @@ pub struct BuildTask {
   pub plugin_driver: SharedPluginDriver,
   pub cache: Arc<Cache>,
   pub current_profile: Option<Box<ModuleProfile>>,
+  pub root_dependency: Option<DependencyId>,
+  pub task_sender: UnboundedSender<rspack_error::Result<TaskResult>>,
 }
 
 #[derive(Debug)]
@@ -261,6 +274,7 @@ pub struct BuildTaskResult {
   pub diagnostics: Vec<Diagnostic>,
   pub current_profile: Option<Box<ModuleProfile>>,
   pub from_cache: bool,
+  pub root_dependency: Option<DependencyId>,
 }
 
 #[async_trait::async_trait]
@@ -289,8 +303,9 @@ impl WorkerTask for BuildTask {
             compiler_context: CompilerContext {
               options: compiler_options.clone(),
               resolver_factory: resolver_factory.clone(),
-              module: Some(module.identifier()),
+              module: module.identifier(),
               module_context: module.as_normal_module().and_then(|m| m.get_context()),
+              task_sender: Some(self.task_sender.clone()),
             },
             plugin_driver: plugin_driver.clone(),
             compiler_options: &compiler_options,
@@ -327,6 +342,7 @@ impl WorkerTask for BuildTask {
         diagnostics,
         current_profile: self.current_profile,
         from_cache: is_cache_valid,
+        root_dependency: self.root_dependency,
       }))
     })
   }
@@ -338,11 +354,13 @@ pub struct ProcessDependenciesTask {
   pub original_module_identifier: ModuleIdentifier,
   pub dependencies: Vec<DependencyId>,
   pub resolve_options: Option<Box<Resolve>>,
+  pub root_dependency: Option<DependencyId>,
 }
 
 #[derive(Debug)]
 pub struct ProcessDependenciesResult {
   pub module_identifier: ModuleIdentifier,
+  pub root_dependency: Option<DependencyId>,
 }
 
 pub type ProcessDependenciesQueue = WorkerQueue<ProcessDependenciesTask>;
@@ -398,3 +416,18 @@ impl CleanTask {
 }
 
 pub type CleanQueue = WorkerQueue<CleanTask>;
+
+#[derive(Debug)]
+pub struct ImportModuleResult {
+  pub request: String,
+  pub sender: UnboundedSender<Result<String>>,
+  pub original_module: Option<ModuleIdentifier>,
+  pub original_module_context: Option<Box<Context>>,
+  pub options: ImportModuleOption,
+}
+
+#[derive(Debug)]
+pub struct ImportModuleOption {
+  pub public_path: Option<String>,
+  pub base_uri: Option<String>,
+}

@@ -45,6 +45,7 @@ export class JsCompilation {
   addMissingDependencies(deps: Array<string>): void
   addBuildDependencies(deps: Array<string>): void
   rebuildModule(moduleIdentifiers: Array<string>, f: (...args: any[]) => any): void
+  importModule(request: string, publicPath: string | undefined | null, baseUri: string | undefined | null, originalModule: string | undefined | null, originalModuleContext: string | undefined | null, callback: (...args: any[]) => any): void
 }
 
 export class JsStats {
@@ -341,6 +342,7 @@ export interface JsLoaderContext {
    * @internal
    */
   diagnosticsExternal: ExternalObject<'Diagnostic[]'>
+  _moduleIdentifier: string
 }
 
 export interface JsModule {
