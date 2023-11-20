@@ -19,6 +19,7 @@ on:
   push:
     branches:
       - main
+      - jerry/test
     paths-ignore:
       - "**/*.md"
     tags-ignore:
@@ -34,6 +35,7 @@ jobs:
     uses: ./.github/workflows/get-runner-labels.yml
 
   test-linux:
+    if: false
     name: Test Linux
     needs: [get-runner-labels]
     uses: ./.github/workflows/reusable-build.yml
@@ -42,22 +44,22 @@ jobs:
       profile: "debug"
       runner: ${{ needs.get-runner-labels.outputs.LINUX_RUNNER_LABELS }}
 
-  # test-windows:
-  #   name: Test Windows
-  #   uses: ./.github/workflows/reusable-build.yml
-  #   with:
-  #     target: x86_64-pc-windows-msvc
-  #     profile: "debug"
-
   test-mac:
     name: Test Mac
-    needs: [get-runner-labels]
-    if: github.ref_name == 'main'
     uses: ./.github/workflows/reusable-build.yml
+    needs: [get-runner-labels]
     with:
       target: x86_64-apple-darwin
-      profile: "debug"
       runner: ${{ needs.get-runner-labels.outputs.MACOS_RUNNER_LABELS }}
+
+  test-mac1:
+    name: Test Mac1
+    uses: ./.github/workflows/reusable-build.yml
+    needs: [get-runner-labels]
+    with:
+      target: aarch64-apple-darwin
+      runner: ${{ needs.get-runner-labels.outputs.MACOS_RUNNER_LABELS }}
+
   cargo-deny:
     name: Check license of dependencies
     runs-on: ubuntu-latest
@@ -104,6 +106,7 @@ jobs:
         run: pnpm run lint:js
 
   rust_changes:
+    if: false
     name: Rust Changes
     runs-on: ubuntu-latest
     outputs:

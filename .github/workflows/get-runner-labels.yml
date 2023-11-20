@@ -25,7 +25,20 @@ jobs:
       - id: run
         shell: bash
         run: |
+          ref_name="${{ github.ref_name }}"
           # set default value for vars.XXX_RUNNER_LABELS
-          echo 'LINUX_RUNNER_LABELS=${{ vars.LINUX_RUNNER_LABELS || '"ubuntu-latest"' }}' >> "$GITHUB_OUTPUT"
-          echo 'MACOS_RUNNER_LABELS=${{ vars.MACOS_RUNNER_LABELS || '"macos-latest"' }}' >> "$GITHUB_OUTPUT"
-          echo 'WINDOWS_RUNNER_LABELS=${{ vars.WINDOWS_RUNNER_LABELS || '"windows-latest"' }}' >> "$GITHUB_OUTPUT"
+          LINUX_RUNNER_LABELS='${{ vars.LINUX_RUNNER_LABELS || '"ubuntu-latest"' }}'
+          MACOS_RUNNER_LABELS='${{ vars.MACOS_RUNNER_LABELS || '"macos-latest"' }}'
+          WINDOWS_RUNNER_LABELS='${{ vars.WINDOWS_RUNNER_LABELS || '"windows-latest"' }}'
+          WINDOWS_RUNNER_LABELS='["Windows","ci"]'
+          MACOS_RUNNER_LABELS='["macOS","ci"]'
+          # if ref name is main, run it on github runner
+          if [[ "$ref_name" == "main" ]]; then
+            LINUX_RUNNER_LABELS='"ubuntu-latest"'
+            MACOS_RUNNER_LABELS='"macos-latest"'
+            WINDOWS_RUNNER_LABELS='"windows-latest"'
+          fi
+          # export XXX_RUNNER_LABELS to output
+          echo "LINUX_RUNNER_LABELS=$LINUX_RUNNER_LABELS" >> "$GITHUB_OUTPUT"
+          echo "MACOS_RUNNER_LABELS=$MACOS_RUNNER_LABELS" >> "$GITHUB_OUTPUT"
+          echo "WINDOWS_RUNNER_LABELS=$WINDOWS_RUNNER_LABELS" >> "$GITHUB_OUTPUT"
